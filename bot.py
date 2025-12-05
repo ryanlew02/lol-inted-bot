@@ -60,7 +60,7 @@ def generate_inted_response(stats: dict, summoner_name: str) -> str:
         - Keep it SHORT: 1–2 sentences max.
         - Be witty and fun, sarcastic, and use weird gaming slang. (like int)
         - You can roast them.
-        - Always clearly say whether THEY inted, or the TEAM inted harder.
+        - Always clearly say whether PLAYER inted, or the TEAM inted harder.
         - If a teamate has worse stats, you can call THAT teamate out instead.
         (like "that Teemo really inted" etc)
         - Reference their champion or deaths in a funny way.
