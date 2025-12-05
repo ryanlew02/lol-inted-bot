@@ -32,18 +32,25 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix="?", intents=intents)
 
+#using the ai model to generate a response
 def generate_inted_response(stats: dict, summoner_name: str) -> str:
-    """
-    Use an AI model to generate a short, funny verdict on whether the player inted.
-    """
-    # Build a tiny, structured description for the model
+
     game_description = (
         f"Player: {summoner_name}\n"
         f"Champion: {stats['champion']}\n"
         f"Kills: {stats['kills']}\n"
         f"Deaths: {stats['deaths']}\n"
+        f"Assists: {stats.get('assists', 0)}\n"
         f"Result: {'Win' if stats['win'] else 'Loss'}\n"
     )
+    if "teammate_champion" in stats:
+        game_description += (
+            "\nTeammate most likely to have inted:\n"
+            f"Teammate Champion: {stats['teammate_champion']}\n"
+            f"Teammate Kills: {stats['teammate_kills']}\n"
+            f"Teammate Deaths: {stats['teammate_deaths']}\n"
+            f"Teammate Assists: {stats.get('teammate_assists', 0)}\n"
+        )
 
     instructions = """
         You are a playful, slightly sarcastic League of Legends analyst.
@@ -51,21 +58,24 @@ def generate_inted_response(stats: dict, summoner_name: str) -> str:
 
         Rules:
         - Keep it SHORT: 1–2 sentences max.
-        - Be witty and fun, not genuinely mean or abusive.
-        - You can roast them a bit, but NO slurs, hate, or harassment.
+        - Be witty and fun, sarcastic, and use weird gaming slang. (like int)
+        - You can roast them.
         - Always clearly say whether THEY inted, or the TEAM inted harder.
-        - Optionally reference their champion or deaths in a funny way.
+        - If a teamate has worse stats, you can call THAT teamate out instead.
+        (like "that Teemo really inted" etc)
+        - Reference their champion or deaths in a funny way.
+        - (you don't always have to use the word "shooting", be creative!)
         """
 
     response = client.responses.create(
-        model="gpt-5-nano", 
+        model="gpt-4.1-mini", 
         instructions=instructions,
         input=f"Here are the stats:\n{game_description}\nNow give your verdict:"
     )
 
     return response.output_text.strip()
 
-
+# get puuid from summoner name and tag line
 def get_puuid(summoner_name: str, tag_line: str, platform: str) -> str:
 
     url = f"https://americas.api.riotgames.com/riot/account/v1/accounts/by-riot-id/{summoner_name}/{tag_line}"
@@ -78,7 +88,7 @@ def get_puuid(summoner_name: str, tag_line: str, platform: str) -> str:
 
     return response.json()["puuid"]
 
-
+# get recent match IDs for a given riot ID
 def get_recent_match_ids_for_riot_id(riot_id: str, count: int = 5) -> list:
     match = re.match(r"^(.+?)#(.+)$", riot_id)
     if not match:
@@ -90,7 +100,7 @@ def get_recent_match_ids_for_riot_id(riot_id: str, count: int = 5) -> list:
     match_ids = get_match_ids(puuid, count=count)
     return match_ids
 
-
+# get player stats from a match
 def get_player_stats_from_match(puuid: str, match_id: str) -> dict:
     url = f"https://americas.api.riotgames.com/lol/match/v5/matches/{match_id}"
     headers = {"X-Riot-Token": RIOT_API_KEY}
@@ -103,21 +113,48 @@ def get_player_stats_from_match(puuid: str, match_id: str) -> dict:
     info = data["info"]
     participants = info["participants"]
 
-    # Find this player in the match
+    player = None
     for p in participants:
         if p["puuid"] == puuid:
-            # Return only what you care about
-            return {
-                "match_id": match_id,
-                "champion": p["championName"],
-                "kills": p["kills"],
-                "deaths": p["deaths"],
-                "win": p["win"],
-            }
+            player = p
+            break
 
-    # If you somehow don't find the puuid
-    raise Exception(f"PUUID {puuid} not found in match {match_id}")
+    if player is None:
+        raise Exception(f"PUUID {puuid} not found in match {match_id}")
 
+    team_id = player["teamId"]
+
+    same_team = [p for p in participants if p["teamId"] == team_id]
+
+    teammates = [p for p in same_team if p["puuid"] != puuid]
+
+    worst_teammate = None
+    if teammates:
+        def score(t):
+            return (t["deaths"], -(t["kills"] + t.get("assists", 0)))
+
+        worst_teammate = max(teammates, key=score)
+
+    result = {
+        "match_id": match_id,
+        "champion": player["championName"],
+        "kills": player["kills"],
+        "deaths": player["deaths"],
+        "assists": player.get("assists", 0),
+        "win": player["win"],
+    }
+
+    if worst_teammate is not None:
+        result.update({
+            "teammate_champion": worst_teammate["championName"],
+            "teammate_kills": worst_teammate["kills"],
+            "teammate_deaths": worst_teammate["deaths"],
+            "teammate_assists": worst_teammate.get("assists", 0),
+        })
+
+    return result
+
+# Discord bot events and commands
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user}")
@@ -137,7 +174,7 @@ def get_match_ids(puuid: str, count: int) -> list:
 
     return response.json()
 
-
+# Command to check if a summoner has inted recently
 @bot.command()
 async def inted(ctx, *, summoner_name_with_tag: str):
 
@@ -162,12 +199,11 @@ async def inted(ctx, *, summoner_name_with_tag: str):
         await ctx.send("No recent matches found for that summoner.")
         return
 
-    # Build stats + lines for display
     lines = []
-    games = []  # store stats so we can use them after user chooses
+    games = []  
     for i, match_id in enumerate(match_ids, start=1):
         stats = get_player_stats_from_match(puuid, match_id)
-        games.append(stats)  # keep full stats
+        games.append(stats) 
 
         result = "Win." if stats["win"] else "Loss."
         line = f"{i}. {stats['champion']} {stats['kills']} / {stats['deaths']} {result}"
@@ -179,7 +215,6 @@ async def inted(ctx, *, summoner_name_with_tag: str):
         f"What game would you like to pick? [1-{len(games)}]"
     )
 
-    # wait for user reply
     def check(message: discord.Message):
         return (
             message.author == ctx.author
@@ -192,26 +227,25 @@ async def inted(ctx, *, summoner_name_with_tag: str):
         await ctx.send("You took too long to respond, try `?inted` again.")
         return
 
-    # Try converting input to a number
     try:
         choice = int(reply.content)
     except ValueError:
         await ctx.send(f"Please pick a number between 1 and {len(games)}.")
         return
 
-    # Check if number is in range
     if not (1 <= choice <= len(games)):
         await ctx.send(f"Please pick a number between 1 and {len(games)}.")
         return
 
-    # Now you have a valid choice and can use that game's stats
     chosen = games[choice - 1]
  
     result = "Win" if chosen["win"] else "Loss"
     await ctx.send(
         f"You picked game {choice}: {chosen['champion']} "
         f"{chosen['kills']} / {chosen['deaths']} ({result}).\n"
-        f"Consulting the Review Board..."
+        f"Consulting the Review Board...\n"
+        f"--------Please Wait----------"
+
     )
 
     try:
