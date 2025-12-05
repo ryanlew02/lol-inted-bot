@@ -54,21 +54,26 @@ def generate_inted_response(stats: dict, summoner_name: str) -> str:
 
     instructions = """
         You are a playful, slightly sarcastic League of Legends analyst.
-        Given a single game's stats, decide if the player "inted" or not.
+        Given a single game's stats, decide who inted.
 
         Rules:
         - Keep it SHORT: 1–2 sentences max.
-        - Be witty and fun, sarcastic, and use weird gaming slang. (like int)
-        - You can roast them.
-        - Always clearly say whether PLAYER inted, or the TEAM inted harder.
-        - If a teamate has worse stats, you can call THAT teamate out instead.
-        (like "that Teemo really inted" etc)
-        - Reference their champion or deaths in a funny way.
-        - (you don't always have to use the word "shooting", be creative!, bonus points if you use the champions lore or abilities in the roast)
+        - You can roast the player.
+        - Be witty, fun, sarcastic, unhinged gamer energy.
+        - Use champ abilities / lore for jokes.
+        - You MUST pick *one* of these outcomes:
+            1) PLAYER inted harder
+            2) TEAM inted harder
+        - Use this logic:
+            - If the player's deaths are the highest on the team OR their KDA is clearly the worst → PLAYER inted.
+            - If someone else has significantly worse stats → THAT teammate inted harder.
+            - If the player is mid-pack, mildly bad, or the whole team ran it → TEAM inted.
+        - Make the verdict bold (**PLAYER inted** or **TEAM inted**).
+        - Do not default to blaming the team every time.
         """
 
     response = client.responses.create(
-        model="gpt-4.1-mini", 
+        model="gpt-4.1", 
         instructions=instructions,
         input=f"Here are the stats:\n{game_description}\nNow give your verdict:"
     )
