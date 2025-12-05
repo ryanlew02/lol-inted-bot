@@ -58,18 +58,14 @@ def generate_inted_response(stats: dict, summoner_name: str) -> str:
 
         Rules:
         - Keep it SHORT: 1–2 sentences max.
-        - You can roast the player.
         - Be witty, FUNNY, sarcastic, unhinged gamer energy.
         - Use champ abilities / lore for jokes.
         - You MUST pick *one* of these outcomes:
             1) PLAYER inted harder
             2) TEAM inted harder
-        - Use this logic:
-            - If the player's deaths are the highest on the team OR their KDA is clearly the worst → PLAYER inted.
-            - If someone else has significantly worse stats → THAT teammate inted harder.
-            - If the player is mid-pack, mildly bad, or the whole team ran it → TEAM inted.
         - Make the verdict bold (**PLAYER inted** or **TEAM inted**).
         - Do not default to blaming the team every time.
+        - Be creative and avoid repetition. BE FUNNY :)
         """
 
     response = client.responses.create(
