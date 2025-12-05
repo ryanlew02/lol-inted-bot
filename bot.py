@@ -59,7 +59,7 @@ def generate_inted_response(stats: dict, summoner_name: str) -> str:
         Rules:
         - Keep it SHORT: 1–2 sentences max.
         - You can roast the player.
-        - Be witty, fun, sarcastic, unhinged gamer energy.
+        - Be witty, FUNNY, sarcastic, unhinged gamer energy.
         - Use champ abilities / lore for jokes.
         - You MUST pick *one* of these outcomes:
             1) PLAYER inted harder
