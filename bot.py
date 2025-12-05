@@ -73,7 +73,7 @@ def generate_inted_response(stats: dict, summoner_name: str) -> str:
         """
 
     response = client.responses.create(
-        model="gpt-4.1", 
+        model="gpt-5.1", 
         instructions=instructions,
         input=f"Here are the stats:\n{game_description}\nNow give your verdict:"
     )
