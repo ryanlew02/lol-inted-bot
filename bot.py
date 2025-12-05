@@ -1,3 +1,4 @@
+import asyncio
 import os
 import re
 import discord
@@ -5,12 +6,20 @@ from discord.ext import commands
 from dotenv import load_dotenv
 import requests
 from urllib.parse import quote
+from openai import OpenAI
+
 
 
 load_dotenv()
 
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 RIOT_API_KEY = os.getenv("RIOT_API_KEY")
+
+client = OpenAI(api_key=OPENAI_API_KEY)
+
+if OPENAI_API_KEY is None:
+    raise ValueError("OPENAI_API_KEY environment variable not set.")
 
 if RIOT_API_KEY is None:
     raise ValueError("RIOT_API_KEY environment variable not set.")
@@ -22,6 +31,48 @@ intents = discord.Intents.default()
 intents.message_content = True
 
 bot = commands.Bot(command_prefix="?", intents=intents)
+
+def generate_inted_response(stats: dict, summoner_name: str) -> str:
+    """
+    Use an AI model to generate a short, funny verdict on whether the player inted.
+    """
+    # Build a tiny, structured description for the model
+    game_description = (
+        f"Player: {summoner_name}\n"
+        f"Champion: {stats['champion']}\n"
+        f"Kills: {stats['kills']}\n"
+        f"Deaths: {stats['deaths']}\n"
+        f"Result: {'Win' if stats['win'] else 'Loss'}\n"
+    )
+
+    instructions = """
+        You are a playful, slightly sarcastic League of Legends analyst.
+        Given a single game's stats, decide if the player "inted" or not.
+
+        Rules:
+        - Keep it SHORT: 1–2 sentences max.
+        - Be witty and fun, not genuinely mean or abusive.
+        - You can roast them a bit, but NO slurs, hate, or harassment.
+        - Always clearly say whether THEY inted, or the TEAM inted harder.
+        - Optionally reference their champion or deaths in a funny way.
+        """
+
+    response = client.responses.create(
+        model="gpt-5-nano",  # or another model you have access to
+        instructions=instructions,
+        input=f"Here are the stats:\n{game_description}\nNow give your verdict:"
+    )
+
+    # Extract plain text output
+    # text_parts = []
+    # for item in response.output:
+    #     if item.type == "message":
+    #         for content_piece in item.message.content:
+    #             if content_piece.type == "output_text":
+    #                 text_parts.append(content_piece.output_text.content[0].text)
+    # return "".join(text_parts).strip()
+    return response.output_text.strip()
+
 
 def get_puuid(summoner_name: str, tag_line: str, platform: str) -> str:
 
@@ -94,8 +145,9 @@ def get_match_ids(puuid: str, count: int) -> list:
 
     return response.json()
 
+
 @bot.command()
-async def inted(ctx, summoner_name_with_tag: str):
+async def inted(ctx, *, summoner_name_with_tag: str):
 
     match = re.match(r"^(.+?)#(.+)$", summoner_name_with_tag)
     if not match:
@@ -118,14 +170,66 @@ async def inted(ctx, summoner_name_with_tag: str):
         await ctx.send("No recent matches found for that summoner.")
         return
 
+    # Build stats + lines for display
     lines = []
+    games = []  # store stats so we can use them after user chooses
     for i, match_id in enumerate(match_ids, start=1):
         stats = get_player_stats_from_match(puuid, match_id)
+        games.append(stats)  # keep full stats
+
         result = "Win." if stats["win"] else "Loss."
         line = f"{i}. {stats['champion']} {stats['kills']} / {stats['deaths']} {result}"
         lines.append(line)
 
     formatted = "\n".join(lines)
-    await ctx.send(f"Recent matches for {summoner_name}:\n{formatted}\nWhat game would you like to pick? [1, 2, 3, 4, 5]")
+    await ctx.send(
+        f"Recent matches for {summoner_name}:\n{formatted}\n"
+        f"What game would you like to pick? [1-{len(games)}]"
+    )
+
+    # ---- wait for user response & validate ----
+    def check(message: discord.Message):
+        return (
+            message.author == ctx.author
+            and message.channel == ctx.channel
+        )
+
+    try:
+        reply = await bot.wait_for("message", timeout=30.0, check=check)
+    except asyncio.TimeoutError:
+        await ctx.send("You took too long to respond, try `?inted` again.")
+        return
+
+    # ---- unified validation ----
+    # Try converting input to a number
+    try:
+        choice = int(reply.content)
+    except ValueError:
+        await ctx.send(f"Please pick a number between 1 and {len(games)}.")
+        return
+
+    # Check if number is in range
+    if not (1 <= choice <= len(games)):
+        await ctx.send(f"Please pick a number between 1 and {len(games)}.")
+        return
+
+    # Now you have a valid choice and can use that game's stats
+    chosen = games[choice - 1]
+
+    # For now, just confirm 
+    result = "Win" if chosen["win"] else "Loss"
+    await ctx.send(
+        f"You picked game {choice}: {chosen['champion']} "
+        f"{chosen['kills']} / {chosen['deaths']} ({result}).\n"
+        f"Consulting the Review Board..."
+    )
+
+    try:
+        verdict = generate_inted_response(chosen, summoner_name)
+    except Exception as e:
+        await ctx.send(f"Couldn't get a verdict from the AI: {e}")
+        return
+
+    await ctx.send(verdict)
 
 bot.run(DISCORD_TOKEN)
