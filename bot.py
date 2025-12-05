@@ -58,19 +58,11 @@ def generate_inted_response(stats: dict, summoner_name: str) -> str:
         """
 
     response = client.responses.create(
-        model="gpt-5-nano",  # or another model you have access to
+        model="gpt-5-nano", 
         instructions=instructions,
         input=f"Here are the stats:\n{game_description}\nNow give your verdict:"
     )
 
-    # Extract plain text output
-    # text_parts = []
-    # for item in response.output:
-    #     if item.type == "message":
-    #         for content_piece in item.message.content:
-    #             if content_piece.type == "output_text":
-    #                 text_parts.append(content_piece.output_text.content[0].text)
-    # return "".join(text_parts).strip()
     return response.output_text.strip()
 
 
@@ -187,7 +179,7 @@ async def inted(ctx, *, summoner_name_with_tag: str):
         f"What game would you like to pick? [1-{len(games)}]"
     )
 
-    # ---- wait for user response & validate ----
+    # wait for user reply
     def check(message: discord.Message):
         return (
             message.author == ctx.author
@@ -200,7 +192,6 @@ async def inted(ctx, *, summoner_name_with_tag: str):
         await ctx.send("You took too long to respond, try `?inted` again.")
         return
 
-    # ---- unified validation ----
     # Try converting input to a number
     try:
         choice = int(reply.content)
@@ -215,8 +206,7 @@ async def inted(ctx, *, summoner_name_with_tag: str):
 
     # Now you have a valid choice and can use that game's stats
     chosen = games[choice - 1]
-
-    # For now, just confirm 
+ 
     result = "Win" if chosen["win"] else "Loss"
     await ctx.send(
         f"You picked game {choice}: {chosen['champion']} "
