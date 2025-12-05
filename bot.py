@@ -64,7 +64,7 @@ def generate_inted_response(stats: dict, summoner_name: str) -> str:
         - If a teamate has worse stats, you can call THAT teamate out instead.
         (like "that Teemo really inted" etc)
         - Reference their champion or deaths in a funny way.
-        - (you don't always have to use the word "shooting", be creative!)
+        - (you don't always have to use the word "shooting", be creative!, bonus points if you use the champions lore or abilities in the roast)
         """
 
     response = client.responses.create(
